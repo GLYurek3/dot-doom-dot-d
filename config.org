@@ -1,0 +1,792 @@
+#+title: Config
+#+author: Gerald Lee Yurek III
+#+email: g3@yurek.me
+#+options: toc: 3 headlines: 4
+#+startup: nohideblocks
+
+* :TOC:
+- [[#configel][Config.el]]
+  - [[#emacs-specific-kinda][Emacs Specific (kinda)]]
+  - [[#cosmetic-changes-more-doom-specific][Cosmetic Changes (More Doom Specific)]]
+  - [[#org-mode][Org mode]]
+  - [[#dired][Dired]]
+  - [[#lisp][Lisp]]
+  - [[#emailmu4e][Email/Mu4e]]
+  - [[#which-key][Which Key]]
+  - [[#elpher][Elpher]]
+  - [[#ligatures][Ligatures]]
+- [[#packageel][Package.el]]
+  - [[#org-journal][Org Journal]]
+  - [[#ligatures-1][Ligatures]]
+  - [[#dired-open][Dired Open]]
+  - [[#dired-subtree][Dired Subtree]]
+  - [[#peep--dired][Peep  Dired]]
+  - [[#elpher-1][Elpher]]
+
+* Config.el
+** Emacs Specific (kinda)
+*** REGISTERS
+- Stolen from https://gitlab.com/dwt1/dotfiles/-/blob/master/.config/doom/config.org
+Emacs registers are compartments where you can save text, rectangles and positions for later use. Once you save text or a rectangle in a register, you can copy it into the buffer once or many times; once you save a position in a register, you can jump back to that position once or many times.  The default GNU Emacs keybindings for these commands (with the exception of counsel-register) involves 'C-x r' followed by one or more other keys.  I wanted to make this a little more user friendly, and since I am using Doom Emacs, I choose to replace the 'C-x r' part of the key chords with 'SPC r'.
+
+| COMMAND                          | DESCRIPTION                        | KEYBINDING |
+|----------------------------------+------------------------------------+------------|
+| copy-to-register                 | /Copy to register/                 | SPC r c    |
+| frameset-to-register             | /Frameset to register/             | SPC r f    |
+| insert-register                  | /Insert contents of register/      | SPC r i    |
+| jump-to-register                 | /Jump to register/                 | SPC r j    |
+| list-registers                   | /List registers/                   | SPC r l    |
+| number-to-register               | /Number to register/               | SPC r n    |
+| counsel-register                 | /Interactively choose a register/  | SPC r r    |
+| view-register                    | /View a register/                  | SPC r v    |
+| window-configuration-to-register | /Window configuration to register/ | SPC r w    |
+| increment-register               | /Increment register/               | SPC r +    |
+| point-to-register                | /Point to register/                | SPC r SPC  |
+
+#+BEGIN_SRC emacs-lisp
+(map! :leader
+      (:prefix ("r" . "registers")
+       :desc "Copy to register" "c" #'copy-to-register
+       :desc "Frameset to register" "f" #'frameset-to-register
+       :desc "Insert contents of register" "i" #'insert-register
+       :desc "Jump to register" "j" #'jump-to-register
+       :desc "List registers" "l" #'list-registers
+       :desc "Number to register" "n" #'number-to-register
+       :desc "Interactively choose a register" "r" #'counsel-register
+       :desc "View a register" "v" #'view-register
+       :desc "Window configuration to register" "w" #'window-configuration-to-register
+       :desc "Increment register" "+" #'increment-register
+       :desc "Point to register" "SPC" #'point-to-register))
+#+END_SRC
+
+
+*** Calendar
+#+begin_src emacs-lisp
+;; https://stackoverflow.com/questions/9547912/emacs-calendar-show-more-than-3-months
+(defun dt/year-calendar (&optional year)
+  (interactive)
+  (require 'calendar)
+  (let* (
+      (current-year (number-to-string (nth 5 (decode-time (current-time)))))
+      (month 0)
+      (year (if year year (string-to-number (format-time-string "%Y" (current-time))))))
+    (switch-to-buffer (get-buffer-create calendar-buffer))
+    (when (not (eq major-mode 'calendar-mode))
+      (calendar-mode))
+    (setq displayed-month month)
+    (setq displayed-year year)
+    (setq buffer-read-only nil)
+    (erase-buffer)
+    ;; horizontal rows
+    (dotimes (j 4)
+      ;; vertical columns
+      (dotimes (i 3)
+        (calendar-generate-month
+          (setq month (+ month 1))
+          year
+          ;; indentation / spacing between months
+          (+ 5 (* 25 i))))
+      (goto-char (point-max))
+      (insert (make-string (- 10 (count-lines (point-min) (point-max))) ?\n))
+      (widen)
+      (goto-char (point-max))
+      (narrow-to-region (point-max) (point-max)))
+    (widen)
+    (goto-char (point-min))
+    (setq buffer-read-only t)))
+
+(defun dt/scroll-year-calendar-forward (&optional arg event)
+  "Scroll the yearly calendar by year in a forward direction."
+  (interactive (list (prefix-numeric-value current-prefix-arg)
+                     last-nonmenu-event))
+  (unless arg (setq arg 0))
+  (save-selected-window
+    (if (setq event (event-start event)) (select-window (posn-window event)))
+    (unless (zerop arg)
+      (let* (
+              (year (+ displayed-year arg)))
+        (dt/year-calendar year)))
+    (goto-char (point-min))
+    (run-hooks 'calendar-move-hook)))
+
+(defun dt/scroll-year-calendar-backward (&optional arg event)
+  "Scroll the yearly calendar by year in a backward direction."
+  (interactive (list (prefix-numeric-value current-prefix-arg)
+                     last-nonmenu-event))
+  (dt/scroll-year-calendar-forward (- (or arg 1)) event))
+
+(map! :leader
+      :desc "Scroll year calendar backward" "<left>" #'dt/scroll-year-calendar-backward
+      :desc "Scroll year calendar forward" "<right>" #'dt/scroll-year-calendar-forward)
+
+(defalias 'year-calendar 'dt/year-calendar)
+#+end_src
+*** Garbage Collector
+Just to give the garbage collector since my computer has enough ram to accommodate
+that many bytes before having to invoke the garbage collector
+#+begin_src emacs-lisp
+
+(setq gc-cons-threshold 50000000)
+
+#+end_src
+
+*** Tabs/Spaces
+This is a futile attempt at trying to change the tab config
+I am not that good yet at emacs lisp nor emacs itself
+#+begin_src emacs-lisp
+
+(setq-default tab-width 4
+              ;; tab-always-indent 'complete
+              indent-tabs-mode t)
+
+#+end_src
+
+*** Set the clangd bianary location because nixos
+#+begin_src emacs-lisp
+(setq lsp-clangd-binary-path "/nix/store/xwnhwdqck5c5x7xddgj2vcrdjd274b3z-system-path/bin/clangd")
+#+end_src
+*** Spell program
+#+begin_src emacs-lisp
+
+(setq ispell-program-name "aspell")
+
+#+end_src
+*** Encoding system
+ASCII is a inferior encoding system to UTF-8, there is no reason not to use UTF-8
+when there are no drawbacks to using UTF-8
+#+begin_src emacs-lisp
+
+(set-language-environment "UTF-8")
+(set-default-coding-systems 'utf-8)
+
+#+end_src
+
+*** Info for git and email
+Set my name and username for git reasons, or what else needs these things
+#+begin_src emacs-lisp
+
+(setq user-full-name "Gerald Lee Yurek III"
+      user-mail-address "g3@yurek.me")
+
+#+end_src
+*** Fix my OCD urges
+The are a select few things that happen at startup or when a command is called
+things like opening a message log, compile log, async compile log, a scratch buffer at startup
+**** Make initial scratch message empty
+#+begin_src emacs-lisp
+
+(setq initial-scratch-message "")
+
+#+end_src
+
+**** Remove the scratch buffer after the mode has been set
+I don't think I have ever used a scratch buffer effectively, neither have I
+wanted to
+#+begin_src emacs-lisp
+
+(defun remove-scratch-buffer ()
+  (if (get-buffer "*scratch*")
+      (kill-buffer "*scratch*")))
+
+(add-hook 'after-change-major-mode-hook 'remove-scratch-buffer)
+
+#+end_src
+
+**** Close Native compile logs
+Because I use GCC-Emacs, the log comes up and I must close it.
+It also took a good long while for me to discover the second line variable
+#+begin_src emacs-lisp
+
+(add-hook 'native-comp-limple-mode-hook 'kill-buffer "*Native-compile-Log*")
+(setq-default native-comp-verbose 0)
+
+;;insurance policy
+(if (get-buffer "*Native-compile-Log*") (kill-buffer "*Native-compile-Log*"))
+(if (get-buffer "*Async-native-compile-log*") (kill-buffer "*Async-native-compile-log*"))
+
+#+end_src
+
+**** Prevent Messages buffer from existing
+#+begin_src emacs-lisp
+
+(setq-default message-log-max nil)
+;; (kill-buffer "*Messages*")
+
+;;insurance policy
+(if (get-buffer "*Messages*") (kill-buffer "*Messages*"))
+
+#+end_src
+
+**** Prevent async compilation log
+#+begin_src emacs-lisp
+
+(setq-default comp-async-report-warnings-errors nil)
+
+#+end_src
+
+**** Prevent completions buffer when I don't need it
+Removes from buffer after file is opened
+#+begin_src  emacs-lisp
+
+(add-hook 'minibuffer-exit-hook
+	  '(lambda ()
+	     (let ((buffer "*Completions*"))
+	       (and (get-buffer buffer)
+		    (kill-buffer buffer)))))
+#+end_src
+
+**** Don't show *Buffer list* when opening multiple files at the same time.
+#+begin_src emacs-lisp
+
+(setq inhibit-startup-buffer-menu t)
+
+;; Show only one active window when opening multiple files at the same time.
+;; (add-hook 'window-setup-hook 'delete-other-windows)
+
+#+end_src
+
+
+
+** Cosmetic Changes (More Doom Specific)
+*** Dashboard
+Various changes mostly slight tweaks to the built in dashboard provided by doom-emacs
+**** ASCII Banner
+Changing the doom dashboard banner because I like this one better
+We are going to gloss over the fact that I "Borrowed" this entire section from a
+blog minus the logo, that we a figlet font I modified with a underline throughout
+the word.
+#+begin_src emacs-lisp
+
+(defun doom-dashboard-draw-ascii-emacs-banner-fn ()
+  "This figlet font is called broadway"
+  (let* ((banner
+      '("                                                              .         .          "
+        "888888888o.          ,o888888o.         ,o888888o.           ,8.       ,8.         "
+        "8888    `^888.    . 8888     `88.    . 8888     `88.        ,888.     ,888.        "
+        "8888        `88. ,8 8888       `8b  ,8 8888       `8b      .`8888.   .`8888.       "
+        "8888         `88 88 8888        `8b 88 8888        `8b    ,8.`8888. ,8.`8888.      "
+        "8888          88 88 8888         88 88 8888         88   ,8'8.`8888,8^8.`8888.     "
+        "8888          88 88 8888         88 88 8888         88  ,8' `8.`8888' `8.`8888.    "
+        "8888         ,88 88 8888        ,8P 88 8888        ,8P ,8'   `8.`88'   `8.`8888.   "
+        "8888        ,88' `8 8888       ,8P  `8 8888       ,8P ,8'     `8.`'     `8.`8888.  "
+        "8888    ,o88P'    ` 8888     ,88'    ` 8888     ,88' ,8'       `8        `8.`8888. "
+        "888888888P'          `8888888P'         `8888888P'  ,8'         `         `8.`8888."
+        "   _____________________________________________________________________________   "
+        ".o8888888888888888888888888888888888888888888888888888888888888888888888888888888o."
+        "                                                                                   "))
+
+     (longest-line (apply #'max (mapcar #'length banner))))
+    (put-text-property
+     (point)
+     (dolist (line banner (point))
+       (insert (+doom-dashboard--center
+        +doom-dashboard--width
+        (concat
+         line (make-string (max 0 (- longest-line (length line)))
+                   98)))
+           "\n"))
+     'face 'doom-dashboard-banner)))
+
+(setq +doom-dashboard-ascii-banner-fn #'doom-dashboard-draw-ascii-emacs-banner-fn);)
+
+#+end_src
+
+**** Changing the Faces/Colors of text
+The default colors for the dashboard are nice, they are set to Gruvbox, but they
+aren't in the /dialect/ or implementation of colors in certain places are not
+to my personal spec
+#+begin_src emacs-lisp
+
+(custom-set-faces!
+  '(doom-dashboard-banner :foreground "#d79921" )
+  '(doom-dashboard-footer :foreground "#b16286")
+  '(doom-dashboard-footer-icon :foreground "#689d6a")
+  '(doom-dashboard-loaded :foreground "#b8bb26")
+  '(doom-dashboard-menu-desc :foreground "#83a598" )
+  '(doom-dashboard-menu-title  :foreground "#fb4934")
+  '(doom-modeline-time :foreground "#458588"))
+(setq doom-gruvbox-dark-variant "medium")
+#+end_src
+
+#+RESULTS:
+: soft
+
+*** Change doom-font
+#+begin_src emacs-lisp
+
+(setq doom-font (font-spec :family "Fira Code" :size 14))
+(setq doom-unicode-font (font-spec :family "Fira Code" :size 14))
+
+#+end_src
+
+
+*** Change doom-theme
+Me personally I am a Gruvbox enthusiast, My wm, text editor(s), terminal, mail
+client, and primary web browser are examples of this.
+#+begin_src emacs-lisp
+
+(setq doom-theme 'doom-gruvbox)
+
+#+end_src
+
+*** Line numbers are non-negotiable
+I can't live without line numbers, especially for the inevitability of a compile
+error.
+#+begin_src emacs-lisp
+
+(setq display-line-numbers-type t)
+
+#+end_src
+
+*** Modeline
+#+begin_src emacs-lisp
+
+(setq doom-modeline-time t
+      doom-modeline-height 11
+      doom-modeline-buffer-name t
+      doom-modeline--battery-status t)
+(setq doom-modeline-enable-word-count t
+      doom-modeline-continuous-word-count-modes '(markdown-mode gfm-mode org-mode))
+(display-battery-mode)
+(setq display-time-day-and-date t)
+(display-time-mode)
+
+
+#+end_src
+** Org mode
+*** General configuration(s)
+This is expected to grow over time
+**** Org root directory
+its best just to have a dedicated directory rather than throwing journa throwing
+journal files wily nilly all over the home directory
+#+begin_src emacs-lisp
+
+(setq org-directory "~/org/")
+
+#+end_src
+
+**** Native theming for src blocks
+#+begin_src emacs-lisp
+
+(setq org-src-fontify-natively t
+      org-src-tab-acts-natively t
+      org-confirm-babel-evaluate nil
+      org-edit-src-content-indentation 0)
+
+#+end_src
+
+*** Org Journal
+
+**** Org-Journal directory
+I would like a directory just for journal entries, let keep everything nested in
+directories, nice and tidy
+#+begin_src emacs-lisp
+
+(setq org-journal-dir "~/org/journal/")
+
+#+end_src
+
+**** Org-Journal File Format
+I would like to have my journals sorted by year/month/day so I have this little
+hack here that kind of works for now. There probably is a better solution but
+I will stick to this for the time being
+#+begin_src emacs-lisp
+
+(setq org-journal-file-format "%Y/%m/%d.org")
+
+#+end_src
+
+*** Keybindings
+**** Org Journal
+This works better for me so I binded this to that
+#+begin_src emacs-lisp
+
+(map! :leader
+      (:prefix ("j" ."Org Journal")
+       :desc "new entry in org journal" "n" #'org-journal-new-entry
+       :desc "open current journal file" "c" #'org-journal-open-current-journal-file
+       ))
+
+#+end_src
+
+
+** Dired
+*** Misc Dired Changes
+**** Icons
+Icons are nice, they liven up the place when used correctly
+#+begin_src emacs-lisp
+
+(add-hook 'dired-mode-hook 'all-the-icons-dired-mode)
+
+#+end_src
+
+**** Dired-Open
+For when I am too lazy to exit emacs, my laptop's second os
+#+begin_src emacs-lisp
+
+
+(setq dired-open-extensions '(("gif" . "nsxiv")
+			      ("jpg" . "nsxiv")
+			      ("png" . "nsxiv")
+			      ("mkv" . "mpv")
+			      ("mp4" . "mpv")))
+
+#+end_src
+*** Ranger
+**** Show hidden
+#+begin_src emacs-lisp
+
+(setq ranger-show-hidden "t")
+
+#+end_src
+
+*** Keybindings To Open Dired
+
+| COMMAND    | DESCRIPTION                          | KEYBINDING |
+|------------+--------------------------------------+------------|
+| dired      | /Open dired file manager/            | SPC d d    |
+| dired-jump | /Jump to current directory in dired/ | SPC d j    |
+
+*** Basic dired commands
+
+| COMMAND                | DESCRIPTION                                   | KEYBINDING |
+|------------------------+-----------------------------------------------+------------|
+| dired-view-file        | /View file in dired/                          | SPC d v    |
+| dired-up-directory     | /Go up in directory tree/                     | h          |
+| dired-find-file        | /Go down in directory tree (or open if file)/ | l          |
+| dired-next-line        | Move down to next line                        | j          |
+| dired-previous-line    | Move up to previous line                      | k          |
+| dired-mark             | Mark file at point                            | m          |
+| dired-unmark           | Unmark file at point                          | u          |
+| dired-do-copy          | Copy current file or marked files             | C          |
+| dired-do-rename        | Rename current file or marked files           | R          |
+| dired-hide-details     | Toggle detailed listings on/off               | (          |
+| dired-git-info-mode    | Toggle git information on/off                 | )          |
+| dired-create-directory | Create new empty directory                    | +          |
+| dired-diff             | Compare file at point with another            | =          |
+| dired-subtree-toggle   | Toggle viewing subtree at point               | TAB        |
+
+*** Dired commands using regex
+
+| COMMAND                 | DESCRIPTION                | KEYBINDING |
+|-------------------------+----------------------------+------------|
+| dired-mark-files-regexp | Mark files using regex     | % m        |
+| dired-do-copy-regexp    | Copy files using regex     | % C        |
+| dired-do-rename-regexp  | Rename files using regex   | % R        |
+| dired-mark-files-regexp | Mark all files using regex | * %        |
+
+*** File permissions and ownership
+
+| COMMAND         | DESCRIPTION                      | KEYBINDING |
+|-----------------+----------------------------------+------------|
+| dired-do-chgrp  | Change the group of marked files | g G        |
+| dired-do-chmod  | Change the mode of marked files  | M          |
+| dired-do-chown  | Change the owner of marked files | O          |
+| dired-do-rename | Rename file or all marked files  | R          |
+*** The Binds
+
+#+begin_src emacs-lisp
+
+(map! :leader
+      (:prefix ("d" . "dired")
+       :desc "Open dired" "d" #'dired
+       :desc "Dired jump to current" "j" #'dired-jump
+       :desc "Dired Ranger" "r" #'ranger
+       :desc "Close dired ranger" "qr" #'ranger-close)
+      (:after dired
+              (:map dired-mode-map
+               :desc "Peep-dired image previews" "d p" #'peep-dired
+               :desc "Dired view file" "d v" #'dired-view-file)))
+#+end_src
+
+#+begin_src emacs-lisp
+
+(evil-define-key 'normal dired-mode-map
+  (kbd "M-RET") 'dired-display-file
+  (kbd "h") 'dired-up-directory
+  (kbd "l") 'dired-open-file ; use dired-find-file instead of dired-open.
+  (kbd "m") 'dired-mark
+  (kbd "t") 'dired-toggle-marks
+  (kbd "u") 'dired-unmark
+  (kbd "C") 'dired-do-copy
+  (kbd "D") 'dired-do-delete
+  (kbd "J") 'dired-goto-file
+  (kbd "M") 'dired-do-chmod
+  (kbd "O") 'dired-do-chown
+  (kbd "P") 'dired-do-print
+  (kbd "R") 'dired-do-rename
+  (kbd "T") 'dired-do-touch
+  (kbd "Y") 'dired-copy-filenamecopy-filename-as-kill ; copies filename to kill ring.
+  (kbd "Z") 'dired-do-compress
+  (kbd "+") 'dired-create-directory
+  (kbd "-") 'dired-do-kill-lines
+  (kbd "% l") 'dired-downcase
+  (kbd "% m") 'dired-mark-files-regexp
+  (kbd "% u") 'dired-upcase
+  (kbd "* %") 'dired-mark-files-regexp
+  (kbd "* .") 'dired-mark-extension
+  (kbd "* /") 'dired-mark-directories
+  (kbd "; d") 'epa-dired-do-decrypt
+  (kbd "; e") 'epa-dired-do-encrypt)
+
+#+end_src
+
+
+** Lisp
+*** Lisp compiler/interpreter
+Sly [and for the times I use Slime] need to know what lisp
+compiler/interpreter/implementation to use.
+#+begin_src emacs-lisp
+
+(setq inferior-lisp-program "sbcl")
+
+#+end_src
+
+*** Keybindings
+**** General keybindings
+Added a open prefix keybind because it felt right to put it under that prefix
+#+begin_src emacs-lisp
+
+(map! :leader
+      (:prefix "o"
+       :desc "open the common lisp repl" "l" #'sly))
+
+#+end_src
+
+
+** Email/Mu4e
+*** Misc options
+**** Mail user agent
+Currently using MU4E for email, I just need to tell emacs that this is the case.
+#+begin_src emacs-lisp
+
+(setq mail-user-agent 'mu4e-user-agent)
+
+#+end_src
+
+**** Back end for mu4e
+The imap backend I am currently using is mbsync,
+it is a little faster than
+#+begin_src emacs-lisp
+
+(setq +mu4e-backend 'mbsync)
+
+#+end_src
+
+**** Setting the root of the mail directory
+The root mail dir is in /home/jy/Mail/
+#+begin_src emacs-lisp
+
+(setq mu4e-root-maildir "~/Mail/")
+
+#+end_src
+
+**** Keeps things from breaking when dealing with MX
+#+begin_src emacs-lisp
+
+(setq mu4e-change-filenames-when-moving t)
+
+#+end_src
+
+**** Don't allow to reply to self
+Don't reply to your own email, thats silly
+#+begin_src emacs-lisp
+
+(setq mu4e-compose-dont-reply-to-self t)
+
+#+end_src
+
+**** kill the message when you exit the buffer of the composed email
+I don't care about the message I am sending if I leave the buffer
+#+begin_src emacs-lisp
+
+(setq message-kill-buffer-on-exit t)
+
+#+end_src
+**** Maildir Shortcuts
+#+begin_src emacs-lisp
+
+	(setq mu4e-maildir-shortcuts
+		  '( ("/yurek.me/Inbox" . ?i)
+		 ("/yurek.me/Archive" . ?a)
+		 ("/yurek.me/Drafts" . ?d)
+		 ("/yurek.me/Deleted Items" . ?t)
+		 ("/yurek.me/Sent Items" . ?s)
+		 ;; Throwaway email for mailing lists
+		 ;; It would be a horrible idea for me to subscribe to
+		 ;; very active mailing lists for development on my
+		 ;; domain email, so I will not
+		 ("/gmail.com/All Mail" . ?1)
+		 ("/gmail.com/Kernel" .?2)
+		 ("/gmail.com/Kernel Newbies" . ?3)
+		 ("/gmail.com/Emacs" . ?4)
+		 ("/gmail.com/Arch" . ?5)
+		 ("/gmail.com/Arch Commits" . ?6)
+		 ("/gmail.com/Gentoo Dev" . ?7)
+		 ("/gmail.com/TLDR" . ?8)
+		 ))
+
+#+end_src
+*** Email accounts
+**** Domain email
+This is the only Microsoft exchange email that has ever worked with IMAP and
+SMTP, its so weird
+#+begin_src emacs-lisp
+
+(set-email-account! "yurek.me"
+		    '((user-mail-address      . "g3@yurek.me")
+		      (user-full-name         . "Gerald Lee Yurek III")
+		      (smtpmail-smtp-server   . "smtp.office365.com")
+		      (smtpmail-smtp-service  . 587)
+		      (smtpmail-stream-type   . starttls)
+		      (smtpmail-debug-info    . t)
+		      (mu4e-drafts-folder     . "/yurek.me/Drafts")
+		      (mu4e-refile-folder     . "/yurek.me/Archive")
+		      (mu4e-sent-folder       . "/yurek.me/Sent Items")
+		      (mu4e-trash-folder      . "/yurek.me/Deleted Items")
+		      (mu4e-update-interval   . 1800)
+					;(mu4e-sent-messages-behavior . 'delete)
+		      )
+		    t )
+
+#+end_src
+
+**** Gmail/Mailing-list Email
+This is my gmail account settings, its just for lurking in mailing lists
+like the Linux kernel, emacs, arch Linux, gentoo.
+#+begin_src  emacs-lisp
+
+(set-email-account! "gmail.com"
+		    '((user-mail-address      . "gly3mb@gmail.com")
+		      (user-full-name         . "Gerald Lee Yurek III")
+		      (smtpmail-smtp-server   . "smtp.gmail.com")
+		      (smtpmail-smtp-service  . 587)
+		      (smtpmail-stream-type   . starttls)
+		      (smtpmail-debug-info    . t)
+		      (mu4e-drafts-folder     . "/gmail.com/Drafts")
+		      (mu4e-refile-folder     . "/gmail.com/Archive")
+		      (mu4e-sent-folder       . "/gmail.com/Sent")
+		      (mu4e-trash-folder      . "/gmail.com/Trash")
+		      (mu4e-update-interval   . 1800)
+					;(mu4e-sent-messages-behavior . 'delete)
+		      )
+		    t )
+
+#+end_src
+
+** Which Key
+*** General Config
+**** Change idle delay
+#+begin_src emacs-lisp
+
+(setq which-key-idle-delay 0.5)
+
+#+end_src
+
+** Elpher
+*** Keybindings
+**** General Keybinds
+#+begin_src emacs-lisp
+
+(map! :leader
+      (:prefix "o"
+       :desc "Open Elpher" "g" #'elpher)
+      (:prefix ("e" . "Elpher")
+       :desc "Open Elpher" "e" #'elpher
+       :desc "Return to the start page" "U" #'elpher-back-to-start
+       :desc "Go back" "u" #'elpher-back
+       :desc "Download item under cursor" "d" #'elpher-download
+       :desc "Download current page" "D" #'elpher-download-current
+       :desc "Bookmark current page" "A" #'elpher-bookmark-current
+       :desc "Bookmark item under cursor" "a" #'elpher-bookmark-link
+       :desc "Bookmark list" "b" #'elpher-show-bookmarks
+       ))
+
+#+end_src
+** Ligatures
+#+begin_src emacs-lisp
+;; Enable the www ligature in every possible major mode
+;; (setq +ligatures-in-modes '(not comint-mode Info-mode elfeed-search-mode elfeed-show-mode))
+;; (ligature-set-ligatures 't '("www"))
+
+;; Enable ligatures in programming modes
+(ligature-set-ligatures 't '("www" "**" "***" "**/" "*>" "*/" "\\\\" "\\\\\\" "{-" "::"
+                                     ":::" ":=" "!!" "!=" "!==" "-}" "----" "-->" "->" "->>"
+                                     "-<" "-<<" "-~" "#{" "#[" "##" "###" "####" "#(" "#?" "#_"
+                                     "#_(" ".-" ".=" ".." "..<" "..." "?=" "??" ";;" "/*" "/**"
+                                     "/=" "/==" "/>" "//" "///" "&&" "||" "||=" "|=" "|>" "^=" "$>"
+                                     "++" "+++" "+>" "=:=" "==" "===" "==>" "=>" "=>>" "<="
+                                     "=<<" "=/=" ">-" ">=" ">=>" ">>" ">>-" ">>=" ">>>" "<*"
+                                     "<*>" "<|" "<|>" "<$" "<$>" "<!--" "<-" "<--" "<->" "<+"
+                                     "<+>" "<=" "<==" "<=>" "<=<" "<>" "<<" "<<-" "<<=" "<<<"
+                                     "<~" "<~~" "</" "</>" "~@" "~-" "~>" "~~" "~~>" "%%"))
+;; (add-to-list 'ligature-composition-table '(("-" . ,() (rx (+ "-") ">"))))
+
+
+
+
+
+(global-ligature-mode 't)
+#+end_src
+
+
+* Package.el
+** Org Journal
+This is for handling a journal, it makes it a lot easier than using my own
+poorly written Emacs lisp.
+#+begin_src emacs-lisp :tangle packages.el
+
+(package! org-journal)
+
+#+end_src
+
+
+** Ligatures
+Doom emacs doesn't correctly render ligatures, lets use this insead
+#+begin_src emacs-lisp :tangle packages.el
+
+(package! ligature)
+
+#+end_src
+
+
+** Dired Open
+External file opener for dired
+for things like media files (i.e. .mp4, .png, .jpg, .mkv)
+
+#+begin_src emacs-lisp :tangle packages.el
+
+(package! dired-open)
+
+#+end_src
+
+
+** Dired Subtree
+#+begin_src emacs-lisp :tangle packages.el
+
+(package! dired-subtree)
+
+#+end_src
+
+
+** Peep  Dired
+A convenient way to look up file contents in other window while browsing
+directory in dired
+#+begin_src emacs-lisp :tangle packages.el
+
+(package! peep-dired)
+
+#+end_src
+
+
+** Elpher
+
+Gemini/Gopher browser for emacs, uses emacs' built-in bookmark system to
+implement bookmarks for the browser
+#+begin_src emacs-lisp :tangle packages.el
+
+(package! elpher)
+
+#+end_src
+
+
